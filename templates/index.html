@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed Fee Analysis | Multi-DEX Comparison</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">💰</span>
+                <h1>Fixed Fee Analysis</h1>
+            </div>
+            <p class="subtitle">Compare total execution costs (slippage + fees) across perp DEXs</p>
+        </header>
+
+        <!-- Input Section -->
+        <section class="input-section">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="asset-select">Select Asset</label>
+                    <select id="asset-select">
+                        <option value="">Loading assets...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="size-selector">
+                <label>Order Size</label>
+                <div class="size-buttons">
+                    <button class="size-btn" data-size="10000">$10K</button>
+                    <button class="size-btn active" data-size="100000">$100K</button>
+                    <button class="size-btn" data-size="1000000">$1M</button>
+                    <button class="size-btn" data-size="10000000">$10M</button>
+                </div>
+            </div>
+
+            <!-- Loading indicator (shown during fetch) -->
+            <div id="loading-indicator" class="loading-indicator" style="display: none;">
+                <span class="spinner"></span>
+                <span>Loading comparison data...</span>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="results-section" class="results-section" style="display: none;">
+            <!-- Winner Card -->
+            <div id="winner-card" class="winner-card">
+                <div class="winner-badge">🏆 BEST EXECUTION</div>
+                <div class="winner-name" id="winner-name">-</div>
+                <div class="winner-cost" id="winner-cost">-</div>
+            </div>
+
+            <!-- Exchange Cards -->
+            <div class="exchange-grid" id="exchange-grid">
+                <!-- Cards will be populated by JavaScript -->
+            </div>
+
+            <!-- Definitions -->
+            <div class="definitions">
+                <h4>📖 Definitions</h4>
+                <ul>
+                    <li><strong>Slippage:</strong> One-way price impact from mid-price</li>
+                    <li><strong>Effective Spread:</strong> Round-trip cost (2 × Slippage)</li>
+                    <li><strong>Total Cost:</strong> Effective Spread + Opening Fee + Closing Fee</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Exchanges: Hyperliquid • Lighter • Paradex • Aster • Avantis • Ostium • Extended</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM Elements
+        const assetSelect = document.getElementById('asset-select');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const resultsSection = document.getElementById('results-section');
+        const exchangeGrid = document.getElementById('exchange-grid');
+        const winnerCard = document.getElementById('winner-card');
+        const winnerName = document.getElementById('winner-name');
+        const winnerCost = document.getElementById('winner-cost');
+        const sizeButtons = document.querySelectorAll('.size-btn');
+
+        // Selected order size
+        let selectedOrderSize = 100000;
+
+        // Exchange logos and colors
+        const exchangeConfig = {
+            hyperliquid: {
+                logo: 'https://s2.coinmarketcap.com/static/img/coins/200x200/32196.png',
+                color: '#00d4aa',
+                name: 'Hyperliquid'
+            },
+            lighter: {
+                logo: 'https://static1.tokenterminal.com//lighter/logo.png?logo_hash=4cc2df01f3dc57643895ca3235a659cabbf2d373',
+                color: '#6366f1',
+                name: 'Lighter'
+            },
+            paradex: {
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQCdoTPnR-mxnSrXCIyw2fWdYkZlaTzQN_7Q&s',
+                color: '#f59e0b',
+                name: 'Paradex'
+            },
+            aster: {
+                logo: 'https://academy-public.coinmarketcap.com/optimized-uploads/9e1ccc8aa77b42c59816e34e53658b49.jpg',
+                color: '#ef4444',
+                name: 'Aster'
+            },
+            avantis: {
+                logo: 'https://s1.coincarp.com/logo/1/avantis.png?style=200&v=1757294589',
+                color: '#8b5cf6',
+                name: 'Avantis'
+            },
+            ostium: {
+                logo: 'https://portal.arbitrum.io/_next/image?url=https%3A%2F%2Fportal-data.arbitrum.io%2Fimages%2Fprojects%2Fostium-logo.webp&w=256&q=75',
+                color: '#3b82f6',
+                name: 'Ostium'
+            },
+            extended: {
+                logo: 'https://img.cryptorank.io/coins/extended1750957204091.png',
+                color: '#10b981',
+                name: 'Extended'
+            },
+            variational: {
+                logo: 'https://cdn.prod.website-files.com/68b98188c8977048233b4dab%2F68f267a6b60fe57e398e3058_68f1f31bb46bd2b55915f33c_variational-logo-animation-poster-00001.jpg',
+                color: '#7c3aed',
+                name: 'Variational'
+            }
+        };
+
+        // Format number with commas
+        function formatNumber(num, decimals = 2) {
+            return num.toLocaleString('en-US', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        // Format USD
+        function formatUSD(num) {
+            return '$' + formatNumber(num, 0);
+        }
+
+        // Load assets on page load
+        async function loadAssets() {
+            try {
+                const response = await fetch('/api/assets');
+                const data = await response.json();
+
+                assetSelect.innerHTML = '<option value="">Select an asset...</option>';
+                data.assets.forEach(asset => {
+                    const option = document.createElement('option');
+                    option.value = asset.key;
+                    option.textContent = asset.name;
+                    assetSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load assets:', error);
+                assetSelect.innerHTML = '<option value="">Error loading assets</option>';
+            }
+        }
+
+        // Size button click handler - auto-compare when clicked
+        sizeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                sizeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedOrderSize = parseInt(btn.dataset.size);
+                // Auto-run comparison if asset is selected
+                if (assetSelect.value) {
+                    compareSlippage();
+                }
+            });
+        });
+
+        // Also auto-compare when asset is changed
+        assetSelect.addEventListener('change', () => {
+            if (assetSelect.value) {
+                compareSlippage();
+            }
+        });
+
+        // Compare slippage
+        async function compareSlippage() {
+            const asset = assetSelect.value;
+
+            if (!asset) {
+                return; // Silently return if no asset selected
+            }
+
+            // Show loading state
+            loadingIndicator.style.display = 'flex';
+            resultsSection.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/compare', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        asset: asset,
+                        order_size: selectedOrderSize
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                displayResults(data);
+
+            } catch (error) {
+                console.error('Failed to compare:', error);
+                alert('Failed to compare slippage. Please try again.');
+            } finally {
+                // Hide loading state
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        // Display results
+        function displayResults(data) {
+            resultsSection.style.display = 'block';
+
+            // Update winner card
+            if (data.winner) {
+                const winnerConfig = exchangeConfig[data.winner];
+                winnerName.innerHTML = `<img src="${winnerConfig.logo}" class="winner-logo" alt="${winnerConfig.name}"> ${winnerConfig.name.toUpperCase()}`;
+                winnerCost.textContent = `Total Cost: ${formatNumber(data.winner_cost_bps)} bps`;
+                winnerCard.style.borderColor = winnerConfig.color;
+            } else {
+                winnerName.textContent = 'No full fills';
+                winnerCost.textContent = '-';
+            }
+
+            // Build exchange cards - only show available ones
+            exchangeGrid.innerHTML = '';
+            const exchanges = ['hyperliquid', 'lighter', 'paradex', 'aster', 'avantis', 'ostium', 'extended', 'variational'];
+
+            // Filter and sort exchanges by total_cost_bps
+            const availableExchanges = exchanges
+                .filter(exchange => data[exchange])
+                .sort((a, b) => {
+                    const costA = data[a].total_cost_bps || 0;
+                    const costB = data[b].total_cost_bps || 0;
+                    return costA - costB;
+                });
+
+            availableExchanges.forEach(exchange => {
+                const exData = data[exchange];
+                const card = createExchangeCard(exchange, exData, data.winner, data.order_size_usd);
+                exchangeGrid.appendChild(card);
+            });
+
+            // Scroll to results
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Create exchange card
+        function createExchangeCard(exchange, exData, winner, orderSize) {
+            const card = document.createElement('div');
+            card.className = 'exchange-card';
+
+            if (exchange === winner) {
+                card.classList.add('winner');
+            }
+
+            const config = exchangeConfig[exchange];
+            const isPartial = exData.executed === 'PARTIAL';
+            const symbol = exData.symbol || '';
+            const isXyz = exData.is_xyz;
+            const symbolDisplay = isXyz ? `<span class="symbol-tag xyz">${symbol}</span>` : (symbol ? `<span class="symbol-tag">${symbol}</span>` : '');
+
+            card.innerHTML = `
+                <div class="card-header" style="border-color: ${config.color}">
+                    <img src="${config.logo}" class="exchange-logo" alt="${config.name}">
+                    <div class="exchange-info">
+                        <span class="exchange-name">${config.name.toUpperCase()}</span>
+                        ${symbolDisplay}
+                    </div>
+                    ${exchange === winner ? '<span class="winner-tag">🏆 WINNER</span>' : ''}
+                </div>
+                <div class="card-body">
+                    <div class="metric">
+                        <span class="label">Slippage</span>
+                        <span class="value">${formatNumber(exData.slippage_bps || 0)} bps</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Effective Spread</span>
+                        <span class="value">${formatNumber(exData.effective_spread_bps || 0)} bps</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Opening Fee</span>
+                        <span class="value">${formatNumber(exData.open_fee_bps || 0)} bps</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Closing Fee</span>
+                        <span class="value">${formatNumber(exData.close_fee_bps || 0)} bps</span>
+                    </div>
+                    <div class="metric total">
+                        <span class="label">Total Cost</span>
+                        <span class="value highlight">${formatNumber(exData.total_cost_bps || 0)} bps</span>
+                    </div>
+                    <div class="metric cost-usd">
+                        <span class="label">Cost in USD</span>
+                        <span class="value">${formatUSD(orderSize * (exData.total_cost_bps || 0) / 10000)}</span>
+                    </div>
+                    <div class="fill-status ${isPartial ? 'partial' : 'filled'}">
+                        ${isPartial ? '⚠️ PARTIAL FILL' : '✓ Full Fill'}
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        // Event listeners (auto-compare on asset/size selection)
+        // Compare button was removed - comparison auto-triggers on selection
+
+        // Initialize
+        loadAssets();
+    </script>
+</body>
+
+</html>
