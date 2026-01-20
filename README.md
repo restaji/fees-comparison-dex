@@ -4,7 +4,7 @@ Compare total execution costs (slippage + fees) across perpetual DEXs.
 
 ## Overview
 
-This tool compares slippage and trading fees across 7 decentralized perpetual exchanges:
+This tool compares slippage and trading fees across 8 decentralized perpetual exchanges:
 
 - **Hyperliquid** - Orderbook-based DEX
 - **Lighter** - Orderbook-based DEX  
@@ -13,6 +13,48 @@ This tool compares slippage and trading fees across 7 decentralized perpetual ex
 - **Avantis** - Oracle-based DEX
 - **Ostium** - Oracle-based DEX
 - **Extended** - Orderbook-based DEX (Starknet)
+- **Variational** - Peer-to-Peer DEX (RFQ)
+
+## Methodology
+
+The tool calculates the **Total Cost (basis points)** for executing a market order of a specified size (e.g., $100K).
+
+### Formula
+$$ \text{Total Cost (bps)} = \text{Slippage (bps)} + \text{Open Fee (bps)} + \text{Close Fee (bps)} $$
+
+### 1. Slippage Calculation
+Slippage is the difference between the **mid-market price** and the **average execution price**.
+
+- **Orderbook DEXs (Hyperliquid, Lighter, Paradex, Aster, Extended)**:
+  - Fetches the full L2 orderbook snapshot.
+  - Simulates walking down the orderbook to fill the requested size.
+  - Calculation: `(Avg Execution Price - Mid Price) / Mid Price`
+
+- **Oracle DEXs (Avantis, Ostium)**:
+  - Uses fixed spread/fee parameters from documentation.
+  - Assumes zero price impact for supported sizes (infinite liquidity assumption up to caps) or fixed slippage models.
+
+- **Variational (RFQ)**:
+  - Fetches pre-calculated bid/ask quotes for size buckets ($1K, $100K, $1M).
+  - Interpolates spread for sizes within range.
+  - Extrapolates linearly for order sizes > $1M.
+  - Uses `mark_price` as the reference mid-price.
+
+### 2. Fee Structure (Taker Fees)
+Fees are applied for both opening and closing positions.
+
+- **Hyperliquid**: 4.5 bps
+- **Lighter**: 0.0 bps (currently)
+- **Paradex**: 0.0 bps (maker/taker model dependent)
+- **Aster**: 4.0 bps
+- **Avantis**: Variable (based on OI skew/utilization)
+- **Ostium**: 3-20 bps (varies by asset class)
+- **Extended**: Orderbook dependent
+- **Variational**: 0.0 bps (fees baked into spread)
+
+### 3. Total Cost
+The final result is expressed in bps: `Effective Spread + Fees`.
+*Effective Spread = 2 × Slippage* (approximate round-trip cost).
 
 ## Supported Assets
 
@@ -30,7 +72,7 @@ This tool compares slippage and trading fees across 7 decentralized perpetual ex
 pip install flask flask-cors requests
 
 # Run the server
-python slippage_api.py
+python rwa_fee_comparisson.py
 ```
 
 ## Usage
@@ -43,20 +85,12 @@ python slippage_api.py
 ## Project Structure
 
 ```
-├── slippage_api.py      # Backend API server
+├── rwa_fee_comparisson.py # Backend API server (main)
 ├── static/
-│   └── styles.css       # Stylesheet
+│   └── styles.css         # Stylesheet
 └── templates/
-    └── index.html       # Frontend UI
+    └── index.html         # Frontend UI
 ```
-
-## Features
-
-- Real-time orderbook data fetching
-- Slippage calculation based on order size
-- Fee breakdown (opening, closing, spread)
-- Auto-compare on asset/size selection
-- Symbol display with exchange-specific tickers
 
 ## License
 

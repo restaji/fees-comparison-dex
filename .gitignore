@@ -36,3 +36,5 @@ orderbook lighter.py
 orderbook.py 
 test.py
 test
+gh_tool/
+gh.zip
