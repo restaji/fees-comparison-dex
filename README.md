@@ -22,24 +22,31 @@ The tool calculates the **Total Cost (basis points)** for executing a market ord
 ### Formula
 $$ \text{Total Cost (bps)} = \text{Slippage (bps)} + \text{Open Fee (bps)} + \text{Close Fee (bps)} $$
 
-### 1. Slippage Calculation
-Slippage is the difference between the **mid-market price** and the **average execution price**.
+### Mid Price Calculation
+For all exchanges, the **mid-price** is calculated as:
+```
+Mid Price = (Best Bid + Best Ask) / 2
+```
+
+### Slippage Calculation
+Slippage measures price impact and is calculated as:
+```
+Slippage (bps) = ((Avg Execution Price - Mid Price) / Mid Price) × 10000
+```
 
 - **Orderbook DEXs (Hyperliquid, Lighter, Paradex, Aster, Extended)**:
   - Fetches the full L2 orderbook snapshot.
   - Simulates walking down the orderbook to fill the requested size.
-  - Calculation: `(Avg Execution Price - Mid Price) / Mid Price`
+  - Calculates average execution price from filled levels.
 
 - **Oracle DEXs (Avantis, Ostium)**:
   - Uses fixed spread/fee parameters from documentation.
-  - Assumes zero price impact for supported sizes (infinite liquidity assumption up to caps) or fixed slippage models.
+  - Assumes zero price impact for supported sizes (infinite liquidity assumption up to caps).
 
 - **Variational (RFQ)**:
   - Fetches pre-calculated bid/ask quotes for size buckets ($1K, $100K, $1M).
   - Interpolates spread for sizes within range.
   - Extrapolates linearly for order sizes > $1M.
-  - Uses `mark_price` as the reference for spread normalization.
-  - Mid-price calculated as `(best_bid + best_ask) / 2` derived from the smallest quote bucket.
 
 ### 2. Fee Structure (Taker Fees)
 Fees are applied for both opening and closing positions.
