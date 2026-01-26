@@ -264,7 +264,7 @@
 
             // Build exchange cards - only show available ones
             exchangeGrid.innerHTML = '';
-            const exchanges = ['hyperliquid', 'lighter', 'paradex', 'aster', 'avantis', 'ostium', 'extended', 'variational'];
+            const exchanges = ['hyperliquid', 'lighter', 'aster', 'avantis', 'ostium', 'extended'];
 
             // Filter and sort exchanges by total_cost_bps
             const availableExchanges = exchanges
@@ -318,7 +318,7 @@
                     <span class="value">${formatNumber(exData.slippage_bps || 0)} bps</span>
                 </div>
                 <div class="metric">
-                    <span class="label">Fees (Op + Cl)</span>
+                    <span class="label">Fees (Open + Close)</span>
                     <span class="value">${formatNumber(fees_bps)} bps</span>
                 </div>
                 <div class="metric">

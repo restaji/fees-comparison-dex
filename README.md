@@ -1,59 +1,50 @@
 # Fixed Fee Analysis
 
-Compare total execution costs (slippage + fees) across perpetual DEXs.
+Compare total execution costs (average slippage + fees) across perpetual DEXs.
 
 ## Overview
 
-This tool compares slippage and trading fees across 8 decentralized perpetual exchanges:
+This tool compares average slippage and trading fees across 8 decentralized perpetual exchanges:
 
 - **Hyperliquid** - Orderbook-based DEX
 - **Lighter** - Orderbook-based DEX  
 - **Aster** - Orderbook-based DEX
+- **Extended** - Orderbook-based DEX 
 - **Avantis** - Oracle-based DEX
 - **Ostium** - Oracle-based DEX
-- **Extended** - Orderbook-based DEX (Starknet)
 
 ## Methodology
 
-The tool calculates the **Total Cost (basis points)** for executing a market order of a specified size (e.g., $100K).
+### Fundamentals
+- **Mid Price**: `(Best Bid + Best Ask) / 2`
+- **Average Slippage**: `|Avg Execution Price - Mid Price| / Mid Price × 10000` (in bps)
 
-### Formula
-$$ \text{Total Cost (bps)} = \text{Slippage (bps)} + \text{Open Fee (bps)} + \text{Close Fee (bps)} $$
+### Calculation Components
 
-### Mid Price Calculation
-For all exchanges, the **mid-price** is calculated as:
-```
-Mid Price = (Best Bid + Best Ask) / 2
-```
+1. **Average Slippage Calculation**:
+   - **Orderbook DEXs**: Uses live orderbook depth to simulate partial or full fills.
+     - Formula: `(Buy Slippage + Sell Slippage) / 2`
+   - **Oracle DEXs**: Uses the price from the oracle.
 
-### Slippage Calculation
-Slippage measures price impact and is calculated as:
-```
-Slippage (bps) = ((Avg Execution Price - Mid Price) / Mid Price) × 10000
-```
+2. **Total Cost Calculation**:
+   - Formula: `Total Cost = Average Slippage + Opening Fee + Closing Fee`
+   - **Opening/Closing Fees**: Determined by the selected Order Type (Taker or Maker).
 
-- **Orderbook DEXs (Hyperliquid, Lighter, Aster, Extended)**:
-  - Fetches the full orderbook snapshot.
-  - Simulates walking down the orderbook to fill the requested size.
-  - Calculates average execution price from filled levels.
-
-- **Non-Orderbook DEXs (Avantis, Ostium)**:
-  - Uses fixed spread/fee parameters from documentation.
-  - Assumes zero price impact for supported sizes.
-
-### 2. Fee Structure (Taker Fees)
+### 2. Fee Structure
 Fees are applied for both opening and closing positions.
 
-- **Hyperliquid**: 4.5 bps
-- **Lighter**: 0.0 bps (currently)
-- **Aster**: 4.0 bps
-- **Avantis**: Variable (based on OI skew/utilization)
-- **Ostium**: 3-20 bps (varies by asset class)
-- **Extended**: Orderbook dependent
+| Exchange | Taker Fee | Maker Fee | Notes |
+|----------|-----------|-----------|-------|
+| **Hyperliquid** | 0.9 bps | 0.3 bps | xyz |
+| **Lighter** | 0.0 bps | 0.0 bps | |
+| **Aster** | 4.0 bps | 0.5 bps | |
+| **Extended** | 2.5 bps | 0.0 bps | |
+| **Avantis** | Variable based on assets | Variable based on assets | |
+| **Ostium** | 3-20 bps | 0.0 bps | |
 
 ### 3. Total Cost
 The final result is expressed in bps: `Effective Spread + Fees`.
-*Effective Spread = 2 × Slippage* (approximate round-trip cost).
+*Effective Spread = 2 × Average Slippage* (estimated round-trip cost).
 
 ## Supported Assets
 
@@ -61,6 +52,7 @@ The final result is expressed in bps: `Effective Spread + Fees`.
 |----------|--------|
 | **Commodities** | Gold (XAU), Silver (XAG) |
 | **Forex** | EUR/USD, GBP/USD, USD/JPY |
+| **Indices** | SPY, QQQ |
 | **Stocks (MAG7)** | AAPL, MSFT, GOOG, AMZN, META, NVDA, TSLA |
 | **Other** | COIN |
 
@@ -86,9 +78,9 @@ python rwa_fee_comparisson.py
 ```
 ├── rwa_fee_comparisson.py # Backend API server (main)
 ├── static/
-│   └── styles.css         # Stylesheet
+│   └── styles.css        
 └── templates/
-    └── index.html         # Frontend UI
+    └── index.html        
 ```
 
 ## License

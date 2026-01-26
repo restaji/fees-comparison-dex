@@ -8,11 +8,11 @@ Compares execution costs across 6 perp DEXs:
 - Lighter  
 - Aster
 - Avantis
-- Ostium (oracle-based)
+- Ostium 
 - Extended
 
-Run with: python slippage_api.py
-Visit: http://localhost:5000
+Run with: python rwa_fee_comparisson.py
+    
 """
 
 from flask import Flask, jsonify, request, render_template
@@ -43,27 +43,12 @@ OSTIUM_FEES_BPS = {
     # Commodities
     'XAUUSD': 1.5,   # Gold (XAU) --Discounted by 50%
     'XAGUSD': 7.5,  # Silver (XAG) --Discounted by 50%
-        # 'XPTUSD': 20.0,  # Platinum   
-        # 'XPDUSD': 20.0,  # Palladium  
-        # 'CLUSD': 10.0,   # Oil
-        # 'HGUSD': 15.0,   # Copper
     # Forex
     'EURUSD': 3.0,
     'GBPUSD': 3.0,
-    'USDJPY': 1.5,
-    # 'USDCAD': 3.0,
-    # 'USDCHF': 3.0,
-    # 'AUDUSD': 3.0,
-    # 'NZDUSD': 3.0,
-    # 'USDMXN': 5.0,  
+    'USDJPY': 1.5,  
     # Indices
     'SPXUSD': 5.0,
-        # 'NDXUSD': 5.0,    
-        # 'DJIUSD': 5.0,    
-        # 'DAXEUR': 5.0,
-        # 'NIKJPY': 5.0,
-        # 'HSIHKD': 5.0,
-        # 'FTSEGBP': 5.0,
     # Stocks
     'NVDAUSD': 5.0,
     'GOGUSD': 5.0,
@@ -74,13 +59,6 @@ OSTIUM_FEES_BPS = {
     'TSLAUSD': 5.0,
     'COINUSD': 5.0,
     'HOODUSD': 5.0,
-        # 'PLTRUSD': 5.0,
-        # 'AMDUSD': 5.0,
-        # 'NFLXUSD': 5.0,
-        # 'ORCLUSD': 5.0,
-        # 'COSTUSD': 5.0,
-        # 'XOMUSD': 5.0,
-        # 'CVXUSD': 5.0,
 }
 
 
@@ -115,6 +93,10 @@ ASSETS = {
     'META': AssetConfig('META/USD', 'META', 'stock', 'META', 117, 'METAUSDT', 'METAUSD', None),
     'NVDA': AssetConfig('NVDA/USD', 'NVDA', 'stock', 'NVDA', 110, 'NVDAUSDT', 'NVDAUSD', None),
     'TSLA': AssetConfig('TSLA/USD', 'TSLA', 'stock', 'TSLA', 112, 'TSLAUSDT', 'TSLAUSD', None),
+    
+    # Indices
+    'SPY': AssetConfig('SPY/USD', 'SPY', 'index', None, 128, None, 'SPYUSD', None),
+    'QQQ': AssetConfig('QQQ/USD', 'QQQ', 'index', None, 129, None, 'QQQUSD', None),
     
     # Other
     'COIN': AssetConfig('COIN/USD', 'COIN', 'stock', 'COIN', 109, 'COINUSDT', 'COINUSD', None),
@@ -224,7 +206,7 @@ class OstiumAPI:
         if result:
             # Add Ostium-specific metadata
             result['fee_bps'] = open_fee_bps
-            result['maker_fee_bps'] = 0.0  # N/A
+            result['maker_fee_bps'] = 0.0 
             if raw_data:
                 result['is_market_open'] = raw_data.get('isMarketOpen', False)
         
@@ -560,7 +542,7 @@ class AvantisStatic:
         key = asset_key.upper()
         
         forex_pairs = ['EURUSD', 'GBPUSD', 'USDJPY']
-        indices = ['QQQ']
+        indices = ['QQQ', 'SPY']
         equities_list = ['HOOD', 'NVDA', 'AAPL', 'AMZN', 'GOOG', 'MSFT', 'META', 'TSLA', 'COIN']
 
         if key == 'XAU':
@@ -1221,7 +1203,7 @@ def compare():
 
 if __name__ == '__main__':
     print("\n" + "=" * 60)
-    print("🚀 SLIPPAGE COMPARISON API SERVER")
+    print("🚀 FIXED FEE & AVERAGE SLIPPAGE COMPARISON API SERVER")
     print("=" * 60)
     print("Open http://127.0.0.1:5001 in your browser")
     print("=" * 60 + "\n")
