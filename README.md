@@ -4,7 +4,7 @@ Compare total execution costs (average slippage + fees) across perpetual DEXs.
 
 ## Overview
 
-This tool compares average slippage and trading fees across 8 decentralized perpetual exchanges:
+This tool compares slippage and trading fees across 6 decentralized perpetual exchanges:
 
 - **Hyperliquid** - Orderbook-based DEX
 - **Lighter** - Orderbook-based DEX  
@@ -17,19 +17,21 @@ This tool compares average slippage and trading fees across 8 decentralized perp
 
 ### Fundamentals
 - **Mid Price**: `(Best Bid + Best Ask) / 2`
-- **Average Slippage**: `|Avg Execution Price - Mid Price| / Mid Price × 10000` (in bps, which retrieved from buy side and sell side)
+- **Slippage**: `|Avg Execution Price - Mid Price| / Mid Price × 10000` (in bps)
   
 
 ### 1. Calculation Components
 
-1. **Average Slippage Calculation**:
-   - **Orderbook DEXs**: Uses live orderbook depth to simulate partial or full fills.
-     - Formula: `(Buy Slippage + Sell Slippage) / 2`
-   - **Oracle DEXs**: Uses the price from the oracle.
+1. **Slippage Calculation**:
+   - **Buy Slippage**: Price impact when buying 
+   - **Sell Slippage**: Price impact when selling 
+   - **Orderbook DEXs**: Uses live orderbook depth to simulate partial or full fills
+   - **Oracle DEXs**: Uses the bid/ask spread from the oracle
 
 2. **Total Cost Calculation**:
-   - Formula: `Total Cost = Average Slippage + Opening Fee + Closing Fee`
-   - **Opening/Closing Fees**: Determined by the selected Order Type (Taker or Maker).
+   - Formula: `Total Cost = Effective Spread + Opening Fee + Closing Fee`
+   - **Effective Spread**: `Buy Slippage + Sell Slippage` (round-trip cost)
+   - **Opening/Closing Fees**: Determined by the selected Order Type (Taker or Maker)
 
 ### 2. Fee Structure
 Fees are applied for both opening and closing positions.
@@ -46,7 +48,7 @@ Fees are applied for both opening and closing positions.
 ### 3. Total Cost
 The final result is expressed in bps: `Effective Spread + Fees`.
 
-*Effective Spread = 2 × Average Slippage* (estimated round-trip cost).
+*Effective Spread = Buy Slippage + Sell Slippage* (round-trip cost).
 
 ## Supported Assets
 
@@ -70,7 +72,7 @@ python rwa_fee_comparisson.py
 
 ## Usage
 
-1. Open `---` in your browser
+1. Open `http://127.0.0.1:5001` in your browser
 2. Select an asset from the dropdown
 3. Choose order size ($10K, $100K, $1M, $10M)
 4. Results auto-refresh on selection

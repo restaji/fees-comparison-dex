@@ -413,7 +413,7 @@ class LighterAPI:
         self.headers = {'Content-Type': 'application/json'}
 
     def get_orderbook(self, market_id: int) -> Optional[Dict]:
-        url = f"{self.base_url}/orderBookOrders?market_id={market_id}&limit=150"
+        url = f"{self.base_url}/orderBookOrders?market_id={market_id}&limit=100"
         try:
             response = requests.get(url, headers=self.headers, timeout=1000)
             response.raise_for_status()
@@ -739,8 +739,10 @@ class ExecutionCalculator:
         if not buy_result or not sell_result:
             return None
         
-        # Average slippage from both sides
-        avg_slippage_bps = (buy_result['slippage_bps'] + sell_result['slippage_bps']) / 2
+        # Slippage from both sides
+        buy_slippage_bps = buy_result['slippage_bps']
+        sell_slippage_bps = sell_result['slippage_bps']
+        avg_slippage_bps = (buy_slippage_bps + sell_slippage_bps) / 2
         filled = buy_result['filled'] and sell_result['filled']
         
         # Calculate total cost
@@ -752,6 +754,8 @@ class ExecutionCalculator:
             'best_bid': orderbook.best_bid,
             'best_ask': orderbook.best_ask,
             'slippage_bps': avg_slippage_bps,
+            'buy_slippage_bps': buy_slippage_bps,
+            'sell_slippage_bps': sell_slippage_bps,
             'open_fee_bps': open_fee_bps,
             'close_fee_bps': close_fee_bps,
             'total_cost_bps': total_cost_bps,
@@ -960,7 +964,9 @@ class ExecutionCalculator:
         if not buy_result or not sell_result:
             return None
 
-        avg_slippage_bps = (buy_result['slippage_bps'] + sell_result['slippage_bps']) / 2
+        buy_slippage_bps = buy_result['slippage_bps']
+        sell_slippage_bps = sell_result['slippage_bps']
+        avg_slippage_bps = (buy_slippage_bps + sell_slippage_bps) / 2
         filled = buy_result['filled'] and sell_result['filled']
         total_cost_bps = avg_slippage_bps + open_fee_bps + close_fee_bps
 
@@ -968,6 +974,8 @@ class ExecutionCalculator:
             'executed': True if filled else 'PARTIAL',
             'mid_price': mid_price,
             'slippage_bps': avg_slippage_bps,
+            'buy_slippage_bps': buy_slippage_bps,
+            'sell_slippage_bps': sell_slippage_bps,
             'open_fee_bps': open_fee_bps,
             'close_fee_bps': close_fee_bps,
             'total_cost_bps': total_cost_bps,
@@ -1138,15 +1146,11 @@ def compare():
     else:
         # TAKER Mode: Standard Taker Fees
         fee_structure = {
-            'hyperliquid': {'open': HYPERLIQUID_TAKER_FEE_BPS, 'close': 0.9},
+            'hyperliquid': {'open': HYPERLIQUID_TAKER_FEE_BPS, 'close': HYPERLIQUID_TAKER_FEE_BPS},
             'lighter': {'open': LIGHTER_TAKER_FEE_BPS, 'close': 0.0},
             'aster': {'open': ASTER_TAKER_FEE_BPS, 'close': 0.0},
-            'extended': {'open': 2.5, 'close': 2.5} # Explicitly set Extended Taker here if not standard
+            'extended': {'open': EXTENDED_TAKER_FEE_BPS, 'close': EXTENDED_TAKER_FEE_BPS}
         }
-    
-    # Extended Taker defaults (if not set above, but I set it above for safety)
-    if 'extended' not in fee_structure and order_type != 'maker':
-         fee_structure['extended'] = {'open': 2.5, 'close': 2.5}
     
     # Ostium has variable fees per asset
     os_data = result.get('ostium')
@@ -1163,12 +1167,6 @@ def compare():
             'open': av.get('open_fee_bps', 0),
             'close': av.get('close_fee_bps', 0)
         }
-    
-    # For Extended, ensure it's in fee_structure if not added by static block
-    if result.get('extended') and 'extended' not in fee_structure:
-        # Fallback if not handled in if/else above
-        fee_structure['extended'] = {'open': 2.5 if order_type != 'maker' else EXTENDED_MAKER_FEE_BPS, 
-                                   'close': 2.5 if order_type != 'maker' else EXTENDED_MAKER_FEE_BPS}
     
     for exchange_name in ['hyperliquid', 'lighter', 'aster', 'avantis', 'ostium', 'extended']:
         ex_data = result.get(exchange_name)
