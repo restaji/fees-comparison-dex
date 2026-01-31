@@ -1141,7 +1141,7 @@ def compare():
     """Compare slippage across exchanges for given asset and order size."""
     data = request.json
     asset = data.get('asset', '').upper()
-    order_size = float(data.get('order_size', 100000))
+    order_size = float(data.get('order_size', 1000000))
     
     order_type = data.get('order_type', 'taker').lower()
     
@@ -1229,16 +1229,16 @@ def compare_get(asset):
     """
     GET endpoint for comparing slippage across exchanges.
     
-    URL: /api/compare/<asset>?size=100000&order_type=taker
+    URL: /api/compare/<asset>?size=1000000&order_type=taker
     
     Parameters:
         asset (path): Asset symbol (e.g., XAU, XAG, AAPL, NVDA)
-        size (query): Order size in USD (default: 100000)
+        size (query): Order size in USD (default: 1000000)
         order_type (query): 'taker' or 'maker' (default: taker)
     
     Example:
         GET /api/compare/XAU?size=50000
-        GET /api/compare/NVDA?size=100000&order_type=maker
+        GET /api/compare/NVDA?size=1000000&order_type=maker
     """
     asset = asset.upper()
     order_size = float(request.args.get('size', 1000000))
@@ -1312,7 +1312,7 @@ def handle_compare(data):
     """Handle WebSocket compare request."""
     try:
         asset = data.get('asset')
-        order_size = data.get('order_size', 100000)
+        order_size = data.get('order_size', 1000000)
         order_type = data.get('order_type', 'taker')
         
         if not asset or asset not in ASSETS:
