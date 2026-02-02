@@ -544,7 +544,7 @@ class AvantisStatic:
     def calculate_cost(self, asset_key: str, order_size_usd: float) -> Dict:
         open_fee_bps = 0.0
         close_fee_bps = 0.0
-        spread_bps = 0.0  # Total spread (will be split into buy/sell)
+        spread_bps = 0.0  # Spread only applies on opening
         
         key = asset_key.upper()
         
@@ -577,24 +577,30 @@ class AvantisStatic:
             close_fee_bps = 4.5
             spread_bps = 5.0
 
-        buy_slippage_bps = spread_bps / 2.0
-        sell_slippage_bps = spread_bps / 2.0
-        total_slippage_bps = buy_slippage_bps + sell_slippage_bps  # Same as spread_bps
+        # Avantis: Spread only occurs on opening, closing has 0 slippage
+        opening_slippage_bps = spread_bps
+        closing_slippage_bps = 0.0
+        total_slippage_bps = opening_slippage_bps + closing_slippage_bps
         total_cost_bps = total_slippage_bps + open_fee_bps + close_fee_bps
 
         return {
             'executed': True,
             'mid_price': 0,
             'slippage_bps': total_slippage_bps,
-            'buy_slippage_bps': buy_slippage_bps,
-            'sell_slippage_bps': sell_slippage_bps,
+            # For Avantis: use opening/closing instead of buy/sell
+            'opening_slippage_bps': opening_slippage_bps,
+            'closing_slippage_bps': closing_slippage_bps,
+            # Also provide buy/sell for compatibility (same values)
+            'buy_slippage_bps': opening_slippage_bps,
+            'sell_slippage_bps': closing_slippage_bps,
+            'slippage_type': 'opening_closing',  # Flag for frontend
             'open_fee_bps': open_fee_bps,
             'close_fee_bps': close_fee_bps,
             'maker_fee_bps': 0.0,
             'total_cost_bps': total_cost_bps,
             'filled': True,
-            'buy': {'filled': True, 'filled_usd': order_size_usd, 'unfilled_usd': 0, 'levels_used': 1, 'slippage_bps': buy_slippage_bps},
-            'sell': {'filled': True, 'filled_usd': order_size_usd, 'unfilled_usd': 0, 'levels_used': 1, 'slippage_bps': sell_slippage_bps},
+            'buy': {'filled': True, 'filled_usd': order_size_usd, 'unfilled_usd': 0, 'levels_used': 1, 'slippage_bps': opening_slippage_bps},
+            'sell': {'filled': True, 'filled_usd': order_size_usd, 'unfilled_usd': 0, 'levels_used': 1, 'slippage_bps': closing_slippage_bps},
             'timestamp': time.time()
         }
 

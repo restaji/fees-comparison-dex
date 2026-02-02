@@ -89,9 +89,10 @@
             <div class="definitions">
                 <h4>Definitions</h4>
                 <ul>
-                    <li><strong>Buy Slippage</strong> – Price impact when buying</li>
-                    <li><strong>Sell Slippage</strong> – Price impact when selling</li>
-                    <li><strong>Total Cost</strong> – Buy + Sell slippage + Opening + Closing fees</li>
+                    <li><strong>Buy/Opening Slippage</strong> – Price impact when opening a position</li>
+                    <li><strong>Sell/Closing Slippage</strong> – Price impact when closing a position</li>
+                    <li><strong>Total Slippage</strong> – Buy Slippage + Sell Slippage (or Opening + Closing)</li>
+                    <li><strong>Total Cost</strong> – Total Slippage + Opening + Closing fees</li>
                 </ul>
             </div>
         </section>
@@ -234,10 +235,16 @@
                 winnerName.innerHTML = `<img src="${cfg.logo}" class="winner-logo" alt="">${cfg.name}`;
                 const wd = data[data.winner];
                 const fees = (wd.open_fee_bps || 0) + (wd.close_fee_bps || 0);
+
+                // Explicitly calculate Total Slippage as Sum (to match definitions)
+                const slip1 = wd.buy_slippage_bps || wd.opening_slippage_bps || 0;
+                const slip2 = wd.sell_slippage_bps || wd.closing_slippage_bps || 0;
+                const totalSlippage = slip1 + slip2;
+
                 winnerCost.innerHTML = `
                     <div style="font-size: 20px; font-weight: 600; margin-bottom: 4px;">${formatNumber(data.winner_cost_bps)} bps</div>
                     <div style="font-size: 13px; opacity: 0.7;">
-                        Slippage ${formatNumber(wd.slippage_bps || 0)} · Fees ${formatNumber(fees)}
+                        Total Slippage ${formatNumber(totalSlippage)} · Fees ${formatNumber(fees)}
                     </div>
                 `;
             } else {
@@ -280,6 +287,27 @@
 
             const fees = (exData.open_fee_bps || 0) + (exData.close_fee_bps || 0);
 
+            // Check if this exchange uses opening/closing terminology (for avantis side)
+            const isOpeningClosing = exData.slippage_type === 'opening_closing';
+            const slipLabel1 = isOpeningClosing ? 'Opening Slippage' : 'Buy Slippage';
+            const slipLabel2 = isOpeningClosing ? 'Closing Slippage' : 'Sell Slippage';
+
+            // Helper to get value with fallback if undefined, but preserve 0
+            const getVal = (...args) => {
+                for (const val of args) {
+                    if (val !== undefined && val !== null) return val;
+                }
+                return 0;
+            };
+
+            const slipValue1 = isOpeningClosing
+                ? getVal(exData.opening_slippage_bps, exData.buy_slippage_bps, exData.slippage_bps)
+                : getVal(exData.buy_slippage_bps, exData.slippage_bps);
+
+            const slipValue2 = isOpeningClosing
+                ? getVal(exData.closing_slippage_bps, exData.sell_slippage_bps, exData.slippage_bps)
+                : getVal(exData.sell_slippage_bps, exData.slippage_bps);
+
             card.innerHTML = `
                 <div class="card-header" style="border-color: ${cfg.color}">
                     <img src="${cfg.logo}" class="exchange-logo" alt="">
@@ -291,12 +319,12 @@
                 </div>
                 <div class="card-body">
                     <div class="metric">
-                        <span class="label">Buy Slippage</span>
-                        <span class="value">${formatNumber(exData.buy_slippage_bps || exData.slippage_bps || 0)} bps</span>
+                        <span class="label">${slipLabel1}</span>
+                        <span class="value">${formatNumber(slipValue1)} bps</span>
                     </div>
                     <div class="metric">
-                        <span class="label">Sell Slippage</span>
-                        <span class="value">${formatNumber(exData.sell_slippage_bps || exData.slippage_bps || 0)} bps</span>
+                        <span class="label">${slipLabel2}</span>
+                        <span class="value">${formatNumber(slipValue2)} bps</span>
                     </div>
                     <div class="metric">
                         <span class="label">Fees</span>
