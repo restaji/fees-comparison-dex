@@ -380,12 +380,11 @@
 
             const fees = (exData.open_fee_bps || 0) + (exData.close_fee_bps || 0);
 
-            // Check if this exchange uses opening/closing terminology (for avantis side)
-            const isOpeningClosing = exData.slippage_type === 'opening_closing';
-            const slipLabel1 = isOpeningClosing ? 'Opening Slippage' : 'Buy Slippage';
-            const slipLabel2 = isOpeningClosing ? 'Closing Slippage' : 'Sell Slippage';
+            // Always use Opening/Closing terminology
+            const slipLabel1 = 'Opening Slippage';
+            const slipLabel2 = 'Closing Slippage';
 
-            // Helper to get value with fallback if undefined, but preserve 0
+            // Helper to get value with fallback
             const getVal = (...args) => {
                 for (const val of args) {
                     if (val !== undefined && val !== null) return val;
@@ -393,13 +392,31 @@
                 return 0;
             };
 
-            const slipValue1 = isOpeningClosing
-                ? getVal(exData.opening_slippage_bps, exData.buy_slippage_bps, exData.slippage_bps)
-                : getVal(exData.buy_slippage_bps, exData.slippage_bps);
+            // Determine values based on direction mapping
+            // If backend already provided opening/closing (e.g. Avantis or updated backend), use those.
+            // Otherwise map buy/sell based on global selectedDirection.
+            let valOpen, valClose;
 
-            const slipValue2 = isOpeningClosing
-                ? getVal(exData.closing_slippage_bps, exData.sell_slippage_bps, exData.slippage_bps)
-                : getVal(exData.sell_slippage_bps, exData.slippage_bps);
+            if (exData.opening_slippage_bps !== undefined) {
+                valOpen = exData.opening_slippage_bps;
+                valClose = exData.closing_slippage_bps;
+            } else {
+                // Determine based on direction
+                // Global 'selectedDirection' is available
+                if (selectedDirection === 'short') {
+                    // Short: Opening = Sell, Closing = Buy
+                    valOpen = exData.sell_slippage_bps;
+                    valClose = exData.buy_slippage_bps;
+                } else {
+                    // Long: Opening = Buy, Closing = Sell
+                    valOpen = exData.buy_slippage_bps;
+                    valClose = exData.sell_slippage_bps;
+                }
+            }
+
+            // Fallback to generic slippage_bps if specific buy/sell missing
+            const slipValue1 = getVal(valOpen, exData.slippage_bps);
+            const slipValue2 = getVal(valClose, exData.slippage_bps);
 
             card.innerHTML = `
                 <div class="card-header" style="border-color: ${cfg.color}">

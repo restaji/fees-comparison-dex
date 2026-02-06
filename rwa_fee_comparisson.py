@@ -1518,7 +1518,7 @@ def compare():
     
     # Get Lighter fees dynamically from API
     config = ASSETS[asset]
-    lighter_taker_bps, lighter_maker_bps = lighter_api.get_fees(config.lighter_market_id) if config.lighter_market_id else (0.0, 0.0)
+    lighter_taker_bps, lighter_maker_bps = comparator.lighter.get_fees(config.lighter_market_id) if config.lighter_market_id else (0.0, 0.0)
     
     # Fee structures
     if order_type == 'maker':
@@ -1555,6 +1555,28 @@ def compare():
             'close': av.get('close_fee_bps', 0)
         }
     
+    # Standardize Slippage Type for all exchanges
+    is_long_direction = (direction == 'long')
+    
+    for exchange_name in ['hyperliquid', 'lighter', 'aster', 'ostium', 'extended']:
+        ex_data = result.get(exchange_name)
+        if ex_data:
+            # Get raw buy/sell slippage
+            buy_slip = ex_data.get('buy_slippage_bps', 0.0)
+            sell_slip = ex_data.get('sell_slippage_bps', 0.0)
+            
+            # Map to Opening/Closing based on direction
+            if is_long_direction:
+                # LONG: Opening = Buy, Closing = Sell
+                ex_data['opening_slippage_bps'] = buy_slip
+                ex_data['closing_slippage_bps'] = sell_slip
+            else:
+                # SHORT: Opening = Sell, Closing = Buy
+                ex_data['opening_slippage_bps'] = sell_slip
+                ex_data['closing_slippage_bps'] = buy_slip
+            
+            ex_data['slippage_type'] = 'opening_closing'
+
     for exchange_name in ['hyperliquid', 'lighter', 'aster', 'avantis', 'ostium', 'extended']:
         ex_data = result.get(exchange_name)
         if ex_data:
