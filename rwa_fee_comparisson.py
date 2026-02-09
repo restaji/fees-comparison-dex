@@ -21,6 +21,10 @@ import json
 import time
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -171,7 +175,6 @@ class OstiumAPI:
         try:
             seasons_url = "https://onlypoints.ostium.io/api/seasons/current"
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                 'Accept': 'application/json',
                 'Referer': 'https://app.ostium.io/'
             }
@@ -995,9 +998,9 @@ class ExtendedAPI:
     """Client for Extended Exchange (Starknet) orderbook data."""
     
     BASE_URL = "https://api.starknet.extended.exchange/api/v1"
-    API_KEY = "8dee2f0750d7f796699ec461b7c64219"
     
     def __init__(self):
+        self.API_KEY = os.getenv("EXTENDED_API_KEY")
         self.session = requests.Session()
         self.session.headers.update({
             "Content-Type": "application/json",

@@ -23,6 +23,33 @@ class LighterDebugger:
             print(f"Error fetching orderbook: {e}")
             return None
 
+    def get_mid_price(self, market_id: int) -> Optional[Dict]:
+        """Fetch only top of book (limit=2) for accurate mid price."""
+        url = f"{self.base_url}/orderBookOrders?market_id={market_id}&limit=2"
+        try:
+            response = requests.get(url, headers=self.headers, timeout=1000)
+            response.raise_for_status()
+            data = response.json()
+            
+            bids = data.get('bids', [])
+            asks = data.get('asks', [])
+            
+            if not bids or not asks:
+                return None
+            
+            best_bid = float(bids[0]['price'])
+            best_ask = float(asks[0]['price'])
+            mid_price = (best_bid + best_ask) / 2
+            
+            return {
+                'best_bid': best_bid,
+                'best_ask': best_ask,
+                'mid_price': mid_price
+            }
+        except Exception as e:
+            print(f"Error fetching mid price: {e}")
+            return None
+
     def display_orderbook(self, orderbook: Dict, levels_to_show: int = 50):
         """Display orderbook in a simple table format."""
         if not orderbook:
@@ -75,13 +102,26 @@ class LighterDebugger:
 
         print("-" * 55)
 
-    def calculate_slippage(self, levels: list, order_size_usd: float) -> Dict:
-        """Walk through orderbook levels and calculate average execution price."""
+    def calculate_slippage(self, levels: list, order_size_usd: float, side: str = 'buy') -> Dict:
+        """Walk through orderbook levels and calculate average execution price.
+        
+        Args:
+            levels: List of orderbook levels (asks for buy, bids for sell)
+            order_size_usd: Order size in USD
+            side: 'buy' (walk asks ascending) or 'sell' (walk bids descending)
+        """
+        # Sort levels: asks ascending (best=lowest), bids descending (best=highest)
+        sorted_levels = sorted(
+            levels,
+            key=lambda x: float(x['price']),
+            reverse=(side == 'sell')
+        )
+        
         unfilled = order_size_usd
         total_qty = 0.0
         total_cost = 0.0
 
-        for level in levels:
+        for level in sorted_levels:
             price = float(level['price'])
             qty = float(level['remaining_base_amount'])
             value = price * qty
@@ -110,8 +150,14 @@ class LighterDebugger:
             'remaining_usd': unfilled
         }
 
-    def analyze_slippage(self, orderbook: Dict, order_size_usd: float = 100_000):
-        """Calculate slippage for buy and sell sides."""
+    def analyze_slippage(self, orderbook: Dict, order_size_usd: float = 100_000, mid_price_data: Dict = None):
+        """Calculate slippage for buy and sell sides.
+        
+        Args:
+            orderbook: Full orderbook for walking the book
+            order_size_usd: Order size in USD
+            mid_price_data: Optional dict with best_bid, best_ask, mid_price from limit=2 call
+        """
         if not orderbook:
             print("No orderbook data")
             return
@@ -123,16 +169,22 @@ class LighterDebugger:
             print("Incomplete orderbook")
             return
 
-        best_bid = float(bids[0]['price'])
-        best_ask = float(asks[0]['price'])
-        mid_price = (best_bid + best_ask) / 2
+        # Use mid_price_data if provided (more accurate from limit=2), otherwise calculate from orderbook
+        if mid_price_data:
+            best_bid = mid_price_data['best_bid']
+            best_ask = mid_price_data['best_ask']
+            mid_price = mid_price_data['mid_price']
+        else:
+            best_bid = float(bids[0]['price'])
+            best_ask = float(asks[0]['price'])
+            mid_price = (best_bid + best_ask) / 2
 
         print(f"\n{'='*55}")
         print(f"SLIPPAGE ANALYSIS (Order Size: ${order_size_usd:,.0f})")
         print(f"{'='*55}")
 
-        # Buy side (walk asks)
-        buy_result = self.calculate_slippage(asks, order_size_usd)
+        # Buy side (walk asks - ascending price)
+        buy_result = self.calculate_slippage(asks, order_size_usd, side='buy')
         if buy_result['filled']:
             buy_slippage_bps = abs((buy_result['avg_price'] - mid_price) / mid_price) * 10000
             print(f"\nBUY:")
@@ -146,8 +198,8 @@ class LighterDebugger:
                 print(f"  Avg Exec Price: ${buy_result['avg_price']:,.4f}")
                 print(f"  Slippage (vs Mid): {buy_slippage_bps:.2f} bps")
 
-        # Sell side (walk bids)
-        sell_result = self.calculate_slippage(bids, order_size_usd)
+        # Sell side (walk bids - descending price)
+        sell_result = self.calculate_slippage(bids, order_size_usd, side='sell')
         if sell_result['filled']:
             sell_slippage_bps = abs((sell_result['avg_price'] - mid_price) / mid_price) * 10000
             print(f"\nSELL:")
@@ -200,6 +252,10 @@ if __name__ == "__main__":
     market_name = MARKETS.get(market_id, f"Market {market_id}")
     print(f"\nFetching orderbook for: {market_name}")
 
+    # Get accurate mid price from limit=2 call
+    mid_price_data = debugger.get_mid_price(market_id)
+    
+    # Get full orderbook for display and slippage calculation
     orderbook = debugger.get_orderbook(market_id)
     debugger.display_orderbook(orderbook)
-    debugger.analyze_slippage(orderbook, order_size_usd=100_000)
+    debugger.analyze_slippage(orderbook, order_size_usd=100_000, mid_price_data=mid_price_data)
