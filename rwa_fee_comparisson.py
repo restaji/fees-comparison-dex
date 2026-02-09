@@ -1000,7 +1000,7 @@ class ExtendedAPI:
     BASE_URL = "https://api.starknet.extended.exchange/api/v1"
     
     def __init__(self):
-        self.API_KEY = os.getenv("EXTENDED_API_KEY")
+        self.API_KEY = os.getenv("EXTENDED_API_KEY", "")
         self.session = requests.Session()
         self.session.headers.update({
             "Content-Type": "application/json",
@@ -1735,10 +1735,8 @@ def compare():
             f_open = fees['open']
             f_close = fees['close']
             
-            if f_open is None or f_close is None:
-                total_cost = None
-            else:
-                total_cost = effective_spread + f_open + f_close
+            # Fallback to 0.0 for missing fees to ensure total cost is calculated
+            total_cost = effective_spread + (f_open or 0.0) + (f_close or 0.0)
             
             ex_data['effective_spread_bps'] = effective_spread
             ex_data['open_fee_bps'] = f_open
@@ -1833,10 +1831,8 @@ def compare_get(asset):
             f_open = fees['open']
             f_close = fees['close']
             
-            if f_open is None or f_close is None:
-                total_cost = None
-            else:
-                total_cost = effective_spread + f_open + f_close
+            # Fallback to 0.0 for missing fees to ensure total cost is calculated
+            total_cost = effective_spread + (f_open or 0.0) + (f_close or 0.0)
             
             ex_data['effective_spread_bps'] = effective_spread
             ex_data['open_fee_bps'] = f_open
@@ -1982,10 +1978,8 @@ def handle_compare(data):
                 f_open = fees['open']
                 f_close = fees['close']
                 
-                if f_open is None or f_close is None:
-                    total_cost = None
-                else:
-                    total_cost = effective_spread + f_open + f_close
+                # Fallback to 0.0 for missing fees to ensure total cost is calculated
+                total_cost = effective_spread + (f_open or 0.0) + (f_close or 0.0)
                 
                 ex_data['effective_spread_bps'] = effective_spread
                 ex_data['open_fee_bps'] = f_open
