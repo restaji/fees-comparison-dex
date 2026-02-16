@@ -32,11 +32,9 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Taker Fees
 HYPERLIQUID_TAKER_FEE_BPS = 0.9
-ASTER_TAKER_FEE_BPS = 4.0
 
 # Maker Fees
 HYPERLIQUID_MAKER_FEE_BPS = 0.3
-ASTER_MAKER_FEE_BPS = 0.5
 
 # ASSETS - MAG7 + COIN + Commodities + Forex
 # extended_symbol is for Extended Exchange (Starknet)
@@ -707,28 +705,89 @@ class LighterAPI:
 
 class AsterAPI:
     BASE_URL = "https://fapi.asterdex.com/fapi/v1"
-    
-    # Hardcoded max leverage from Aster UI (API data is inaccurate)
-    MAX_LEVERAGE = {
-        'XAUUSDT': 75,
-        'XAGUSDT': 100,
-        'QQQUSDT': 10,  
-        'NVDAUSDT': 10,
-        'AAPLUSDT': 10,
-        'AMZNUSDT': 10,
-        'GOOGUSDT': 10,
-        'MSFTUSDT': 10,
-        'METAUSDT': 10,
-        'TSLAUSDT': 10,
-        'COINUSDT': None, #not available
-    }
+    LEVERAGE_API = "https://www.asterdex.com/bapi/futures/v1/public/future/common/symbol/leverageoi/remaining"
+    SYMBOLS_API = "https://www.asterdex.com/bapi/futures/v1/public/future/simple/symbols"
     
     def __init__(self):
         self.headers = {'Content-Type': 'application/json'}
+        self.leverage_cache = {}  # symbol -> max_leverage
+        self.leverage_cache_loaded = {}  # symbol -> bool
+        self.fee_cache = {}  # symbol -> {taker_fee_bps, maker_fee_bps}
+        self.fee_cache_loaded = False
+    
+    def _load_fee_cache(self):
+        """
+        Load fees from Aster symbols API for all symbols.
+        tradingFeeRate of 0.0004 = 4 BPS
+        """
+        if self.fee_cache_loaded:
+            return
+        
+        try:
+            response = requests.post(self.SYMBOLS_API, headers=self.headers, json={}, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success') and data.get('data'):
+                    symbols = data['data']
+                    if isinstance(symbols, list):
+                        for sym_info in symbols:
+                            symbol = sym_info.get('symbol')
+                            if symbol:
+                                # tradingFeeRate: 0.0004 = 4 BPS (multiply by 10000)
+                                trading_fee_rate = sym_info.get('tradingFeeRate')
+                                if trading_fee_rate is not None:
+                                    taker_fee_bps = float(trading_fee_rate) * 10000
+                                    # Maker fee: use makerFeeRate if available, otherwise default to 0.5 BPS
+                                    maker_fee_rate = sym_info.get('makerFeeRate')
+                                    maker_fee_bps = float(maker_fee_rate) * 10000 if maker_fee_rate is not None else 0.5
+                                    self.fee_cache[symbol] = {
+                                        'taker_fee_bps': taker_fee_bps,
+                                        'maker_fee_bps': maker_fee_bps
+                                    }
+                self.fee_cache_loaded = True
+        except Exception as e:
+            print(f"Error loading Aster fee cache: {e}")
+    
+    def get_fees(self, symbol: str) -> Tuple[Optional[float], Optional[float]]:
+        """Get taker and maker fees for a symbol. Returns (taker_bps, maker_bps) or (None, None) if not found."""
+        self._load_fee_cache()
+        fees = self.fee_cache.get(symbol)
+        if fees:
+            return (fees.get('taker_fee_bps'), fees.get('maker_fee_bps'))
+        return (None, None)
+    
+    def _fetch_max_leverage(self, symbol: str) -> Optional[int]:
+        """
+        Fetch max leverage from Aster API.
+        The API returns leverageOiRemainingMap where keys are leverage values.
+        The highest key represents the max leverage available.
+        """
+        if self.leverage_cache_loaded.get(symbol):
+            return self.leverage_cache.get(symbol)
+        
+        try:
+            url = f"{self.LEVERAGE_API}?symbol={symbol}"
+            response = requests.get(url, headers=self.headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success') and data.get('data'):
+                    leverage_map = data['data'].get('leverageOiRemainingMap', {})
+                    if leverage_map:
+                        # Get the highest leverage key (max leverage available)
+                        max_lev = max(int(k) for k in leverage_map.keys())
+                        self.leverage_cache[symbol] = max_lev
+                        self.leverage_cache_loaded[symbol] = True
+                        return max_lev
+        except Exception as e:
+            print(f"Error fetching Aster max leverage for {symbol}: {e}")
+        
+        self.leverage_cache_loaded[symbol] = True
+        self.leverage_cache[symbol] = None
+        return None
     
     def get_max_leverage(self, symbol: str) -> Optional[int]:
-        """Get max leverage for a symbol from hardcoded lookup."""
-        return self.MAX_LEVERAGE.get(symbol)
+        """Get max leverage for a symbol from API."""
+        return self._fetch_max_leverage(symbol)
 
     def get_orderbook(self, symbol: str) -> Optional[Dict]:
         url = f"{self.BASE_URL}/depth"
@@ -776,16 +835,22 @@ class AsterAPI:
         if not std_orderbook:
             return None
         
+        # Get dynamic fees from API
+        taker_fee_bps, maker_fee_bps = self.get_fees(symbol) if symbol else (None, None)
+        
+        # Use 0.0 for calculation if fee is None (will be reflected in result)
+        calc_fee = taker_fee_bps if taker_fee_bps is not None else 0.0
+        
         result = ExecutionCalculator.calculate_execution_cost(
             std_orderbook,
             order_size_usd,
-            open_fee_bps=ASTER_TAKER_FEE_BPS,
+            open_fee_bps=calc_fee,
             close_fee_bps=0.0
         )
         
         if result:
-            result['fee_bps'] = ASTER_TAKER_FEE_BPS
-            result['maker_fee_bps'] = ASTER_MAKER_FEE_BPS
+            result['fee_bps'] = taker_fee_bps
+            result['maker_fee_bps'] = maker_fee_bps
             if symbol:
                 result['max_leverage'] = self.get_max_leverage(symbol)
         
@@ -1572,7 +1637,6 @@ class FeeComparator:
             result['aster'] = aster_result
 
         # --- Avantis (Static) ---
-        # --- Avantis (Static) ---
         is_long = (direction.lower() == 'long')
         avantis_result = self.avantis.calculate_cost(asset_key, order_size_usd, is_long=is_long)
         if avantis_result:
@@ -1662,9 +1726,10 @@ def compare():
     # Calculate totals and determine winner
     exchanges = []
     
-    # Get Lighter and Extended fees dynamically from API
+    # Get Lighter, Aster, and Extended fees dynamically from API
     config = ASSETS[asset]
     lighter_taker_bps, lighter_maker_bps = comparator.lighter.get_fees(config.lighter_market_id) if config.lighter_market_id else (0.0, 0.0)
+    aster_taker_bps, aster_maker_bps = comparator.aster.get_fees(config.aster_symbol) if config.aster_symbol else (None, None)
     extended_taker_bps, extended_maker_bps = comparator.extended.get_fees(config.extended_symbol) if config.extended_symbol else (0.0, 0.0)
     
     # Fee structures
@@ -1673,7 +1738,7 @@ def compare():
         fee_structure = {
             'hyperliquid': {'open': HYPERLIQUID_MAKER_FEE_BPS, 'close': HYPERLIQUID_MAKER_FEE_BPS},
             'lighter': {'open': lighter_maker_bps, 'close': lighter_maker_bps},
-            'aster': {'open': ASTER_MAKER_FEE_BPS, 'close': ASTER_MAKER_FEE_BPS},
+            'aster': {'open': aster_maker_bps, 'close': aster_maker_bps},
             'extended': {'open': extended_maker_bps, 'close': extended_maker_bps}
         }
     else:
@@ -1681,7 +1746,7 @@ def compare():
         fee_structure = {
             'hyperliquid': {'open': HYPERLIQUID_TAKER_FEE_BPS, 'close': HYPERLIQUID_TAKER_FEE_BPS},
             'lighter': {'open': lighter_taker_bps, 'close': 0.0},
-            'aster': {'open': ASTER_TAKER_FEE_BPS, 'close': 0.0},
+            'aster': {'open': aster_taker_bps, 'close': 0.0},
             'extended': {'open': extended_taker_bps, 'close': extended_taker_bps}
         }
     
@@ -1793,23 +1858,24 @@ def compare_get(asset):
     # Calculate totals and determine winner (same logic as POST endpoint)
     exchanges = []
     
-    # Get Lighter and Extended fees dynamically from API
+    # Get Lighter, Aster, and Extended fees dynamically from API
     config = ASSETS[asset]
     lighter_taker_bps, lighter_maker_bps = comparator.lighter.get_fees(config.lighter_market_id) if config.lighter_market_id else (0.0, 0.0)
+    aster_taker_bps, aster_maker_bps = comparator.aster.get_fees(config.aster_symbol) if config.aster_symbol else (None, None)
     extended_taker_bps, extended_maker_bps = comparator.extended.get_fees(config.extended_symbol) if config.extended_symbol else (0.0, 0.0)
     
     if order_type == 'maker':
         fee_structure = {
             'hyperliquid': {'open': HYPERLIQUID_MAKER_FEE_BPS, 'close': HYPERLIQUID_MAKER_FEE_BPS},
             'lighter': {'open': lighter_maker_bps, 'close': lighter_maker_bps},
-            'aster': {'open': ASTER_MAKER_FEE_BPS, 'close': ASTER_MAKER_FEE_BPS},
+            'aster': {'open': aster_maker_bps, 'close': aster_maker_bps},
             'extended': {'open': extended_maker_bps, 'close': extended_maker_bps}
         }
     else:
         fee_structure = {
             'hyperliquid': {'open': HYPERLIQUID_TAKER_FEE_BPS, 'close': HYPERLIQUID_TAKER_FEE_BPS},
             'lighter': {'open': lighter_taker_bps, 'close': 0.0},
-            'aster': {'open': ASTER_TAKER_FEE_BPS, 'close': 0.0},
+            'aster': {'open': aster_taker_bps, 'close': 0.0},
             'extended': {'open': extended_taker_bps, 'close': extended_taker_bps}
         }
     
@@ -1941,22 +2007,23 @@ def handle_compare(data):
         # Calculate total costs and determine winner (same logic as HTTP endpoint)
         exchanges = []
         
-        # Get Lighter and Extended fees dynamically from API
+        # Get Lighter, Aster, and Extended fees dynamically from API
         lighter_taker_bps, lighter_maker_bps = lighter_api.get_fees(config.lighter_market_id) if config.lighter_market_id else (0.0, 0.0)
+        aster_taker_bps, aster_maker_bps = aster_api.get_fees(config.aster_symbol) if config.aster_symbol else (None, None)
         extended_taker_bps, extended_maker_bps = extended_api.get_fees(config.extended_symbol) if config.extended_symbol else (0.0, 0.0)
         
         if order_type == 'maker':
             fee_structure = {
                 'hyperliquid': {'open': HYPERLIQUID_MAKER_FEE_BPS, 'close': HYPERLIQUID_MAKER_FEE_BPS},
                 'lighter': {'open': lighter_maker_bps, 'close': lighter_maker_bps},
-                'aster': {'open': ASTER_MAKER_FEE_BPS, 'close': ASTER_MAKER_FEE_BPS},
+                'aster': {'open': aster_maker_bps, 'close': aster_maker_bps},
                 'extended': {'open': extended_maker_bps, 'close': extended_maker_bps}
             }
         else:
             fee_structure = {
                 'hyperliquid': {'open': HYPERLIQUID_TAKER_FEE_BPS, 'close': HYPERLIQUID_TAKER_FEE_BPS},
-                'lighter': {'open': lighter_taker_bps, 'close': 0.0},
-                'aster': {'open': ASTER_TAKER_FEE_BPS, 'close': 0.0},
+                'lighter': {'open': lighter_taker_bps, 'close': lighter_taker_bps},
+                'aster': {'open': aster_taker_bps, 'close': aster_taker_bps},
                 'extended': {'open': extended_taker_bps, 'close': extended_taker_bps}
             }
         
@@ -1966,7 +2033,7 @@ def handle_compare(data):
         
         av = result.get('avantis')
         if av:
-            fee_structure['avantis'] = {'open': av.get('open_fee_bps', 0), 'close': av.get('close_fee_bps', 0)}
+            fee_structure['avantis'] = {'open': av.get('open_fee_bps'), 'close': av.get('close_fee_bps')}
         
         for exchange_name in ['hyperliquid', 'lighter', 'aster', 'avantis', 'ostium', 'extended']:
             ex_data = result.get(exchange_name)
