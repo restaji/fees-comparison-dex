@@ -104,19 +104,16 @@
 
             <div class="definitions">
                 <h4>Definitions</h4>
-                <ul>
-                    <li><strong>Buy/Opening Slippage</strong> – Price impact when opening a position</li>
-                    <li><strong>Sell/Closing Slippage</strong> – Price impact when closing a position</li>
-                    <li><strong>Total Slippage</strong> – Buy Slippage + Sell Slippage (or Opening + Closing)</li>
-                    <li><strong>Total Cost</strong> – Total Slippage + Opening + Closing fees</li>
+                <ul style="margin-top: 12px;">
+                    <li><strong>Slippage</strong> – Based on direction while opening</li>
+                    <li><strong>Fees</strong> – Opening + Closing (Taker)</li>
+                    <li><strong>Total Cost</strong> – Slippage + Fees</li>
+                    <li><strong>Updated</strong> – Latest time data was fetched</li>
                 </ul>
                 <p class="disclaimer">
                     <strong>Disclaimer:</strong> Data is sourced from public orderbooks and APIs. Hyperliquid data uses
-                    4 significant figures due to price bucket accuracy. Due to inherent
-                    limitations, results reflect available liquidity at the time of API call and may not represent
-                    actual
-                    execution conditions.
-                    Use for informational purposes only.
+                    4 significant figures due to price bucket accuracy. Results reflect available liquidity at the time
+                    of API call and may not represent actual execution conditions. Use for informational purposes only.
                 </p>
             </div>
         </section>
