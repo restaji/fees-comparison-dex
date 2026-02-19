@@ -2218,10 +2218,12 @@ def handle_compare(data):
 
 
 if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5001))
+    debug = os.environ.get("RAILWAY_ENVIRONMENT") is None  # Debug only locally
     print("\n" + "=" * 60)
     print("🚀 FIXED FEE & AVERAGE SLIPPAGE COMPARISON API SERVER")
     print("=" * 60)
-    print("Open http://127.0.0.1:5001 in your browser")
+    print(f"Running on port {port} (debug={debug})")
     print("WebSocket support enabled")
     print("=" * 60 + "\n")
-    socketio.run(app, debug=True, port=5001)
+    socketio.run(app, host="0.0.0.0", debug=debug, port=port)
